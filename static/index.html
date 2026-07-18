@@ -1,0 +1,624 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LLM HTML Arena — OpenAI-compatible comparison bench</title>
+  <style>
+    :root {
+      --bg: #07090d;
+      --surface: #0e1219;
+      --surface-2: #141a23;
+      --line: #26303d;
+      --text: #edf2f7;
+      --muted: #8290a3;
+      --model-a: #9eff6b;
+      --model-b: #ffb454;
+      --blue: #6cc8ff;
+      --red: #ff657a;
+      --shadow: 0 24px 70px rgba(0, 0, 0, .38);
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; min-height: 100%; background: var(--bg); color: var(--text); font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+    body { min-height: 100vh; background-image: radial-gradient(circle at 20% -10%, rgba(108, 200, 255, .10), transparent 32%), radial-gradient(circle at 85% 0, rgba(158, 255, 107, .08), transparent 28%); }
+    button, textarea, input, select { font: inherit; }
+    button { cursor: pointer; }
+    .shell { width: min(1600px, 100%); margin: 0 auto; padding: 18px 22px 30px; }
+    .top { display: flex; align-items: center; justify-content: space-between; gap: 20px; margin-bottom: 16px; }
+    .eyebrow { color: var(--blue); font-size: 11px; font-weight: 800; letter-spacing: .18em; text-transform: uppercase; }
+    h1 { margin: 4px 0 0; font-size: clamp(22px, 2.5vw, 38px); letter-spacing: -.04em; }
+    .subtitle { color: var(--muted); margin-top: 5px; font-size: 14px; }
+    .top-actions { display: flex; align-items: center; gap: 10px; }
+    .key-state { display: inline-flex; align-items: center; gap: 8px; border: 1px solid var(--line); padding: 8px 11px; border-radius: 999px; color: var(--muted); font-size: 12px; background: rgba(14, 18, 25, .82); }
+    .key-state::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--red); box-shadow: 0 0 14px currentColor; }
+    .key-state.ok::before { background: var(--model-a); }
+    .btn { border: 1px solid var(--line); color: var(--text); background: var(--surface-2); padding: 10px 14px; border-radius: 10px; font-weight: 700; transition: .18s ease; }
+    .btn:hover { transform: translateY(-1px); border-color: #455267; }
+    .btn:disabled { opacity: .45; cursor: not-allowed; transform: none; }
+    .btn.primary { background: var(--text); color: #080b10; border-color: var(--text); }
+    .btn.demo { color: var(--blue); }
+    .btn.danger { color: var(--red); }
+    .setup-card { background: rgba(14, 18, 25, .88); border: 1px solid var(--line); border-radius: 15px; padding: 16px; box-shadow: var(--shadow); margin-bottom: 14px; backdrop-filter: blur(16px); }
+    .setup-grid { display: grid; grid-template-columns: minmax(0, 1fr) 190px 180px; gap: 12px; align-items: end; }
+    .endpoint-grid { grid-template-columns: minmax(280px, 1.25fr) minmax(220px, 1fr) minmax(220px, 1fr); margin-bottom: 12px; }
+    label { display: block; color: var(--muted); font-size: 11px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; margin-bottom: 7px; }
+    textarea, input, select { width: 100%; color: var(--text); background: #080b10; border: 1px solid var(--line); border-radius: 10px; outline: none; }
+    textarea { height: 112px; resize: vertical; padding: 12px 13px; line-height: 1.45; }
+    input, select { height: 42px; padding: 0 11px; }
+    textarea:focus, input:focus, select:focus { border-color: #55718f; box-shadow: 0 0 0 3px rgba(108, 200, 255, .09); }
+    .setup-actions { display: flex; justify-content: flex-end; gap: 9px; margin-top: 12px; align-items: center; }
+    .setup-note { margin-right: auto; color: var(--muted); font-size: 12px; max-width: 750px; }
+    .tabbar { display: flex; align-items: center; gap: 6px; border-bottom: 1px solid var(--line); margin: 8px 0 14px; }
+    .tab { color: var(--muted); border: 0; background: none; padding: 11px 15px; border-bottom: 2px solid transparent; font-weight: 750; }
+    .tab.active { color: var(--text); border-bottom-color: var(--blue); }
+    .view { display: none; }
+    .view.active { display: block; }
+    .view-toolbar { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; min-height: 40px; }
+    .view-toolbar .hint { color: var(--muted); font-size: 12px; margin-left: auto; }
+    .comparison-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+    .model-panel { min-width: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; box-shadow: var(--shadow); }
+    .model-panel.a { border-top: 2px solid var(--model-a); }
+    .model-panel.b { border-top: 2px solid var(--model-b); }
+    .model-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 61px; padding: 10px 14px; background: var(--surface-2); border-bottom: 1px solid var(--line); }
+    .model-title { font-size: 16px; font-weight: 850; }
+    .model-panel.a .model-title { color: var(--model-a); }
+    .model-panel.b .model-title { color: var(--model-b); }
+    .phase { margin-top: 3px; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .1em; }
+    .mini-metrics { display: flex; gap: 12px; text-align: right; }
+    .mini-metric { min-width: 62px; }
+    .mini-metric span { display: block; color: var(--muted); font-size: 9px; font-weight: 800; letter-spacing: .09em; text-transform: uppercase; }
+    .mini-metric b { font-size: 13px; font-variant-numeric: tabular-nums; }
+    .stream { height: 470px; margin: 0; padding: 16px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; color: #b7c3d1; background: #090c11; font: 12px/1.55 "Cascadia Code", Consolas, monospace; scrollbar-color: #354153 transparent; }
+    .stream.final { color: #dbe6f1; }
+    .placeholder { color: #536174; }
+    .progress-line { height: 3px; background: #111720; overflow: hidden; }
+    .progress-line::after { content: ""; display: block; width: 34%; height: 100%; transform: translateX(-120%); background: linear-gradient(90deg, transparent, var(--blue), transparent); }
+    .model-panel.running .progress-line::after { animation: scan 1.3s infinite linear; }
+    @keyframes scan { to { transform: translateX(330%); } }
+    .preview-viewport { position: relative; width: 100%; aspect-ratio: 8/5; overflow: hidden; background: #080b10; }
+    .preview-stage { position: absolute; left: 0; top: 0; width: 1440px; height: 900px; transform-origin: top left; will-change: transform; }
+    .preview-frame { display: block; width: 1440px; height: 900px; border: 0; background: #080b10; }
+    .preview-metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; padding: 10px; border-top: 1px solid var(--line); background: var(--surface-2); }
+    .preview-metrics div { padding: 7px 8px; background: #0b0f15; border-radius: 8px; }
+    .preview-metrics span { display: block; color: var(--muted); font-size: 9px; text-transform: uppercase; letter-spacing: .08em; }
+    .preview-metrics b { font-size: 13px; font-variant-numeric: tabular-nums; }
+    .score-card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 16px; box-shadow: var(--shadow); }
+    .score-head { display: flex; align-items: baseline; justify-content: space-between; gap: 20px; margin-bottom: 14px; }
+    .score-head h2 { margin: 0; font-size: 22px; }
+    .total-cost { color: var(--muted); }
+    .total-cost strong { color: var(--model-a); font-size: 22px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { padding: 11px 10px; border-bottom: 1px solid var(--line); text-align: right; font-variant-numeric: tabular-nums; }
+    th:first-child, td:first-child { text-align: left; }
+    th { color: var(--muted); font-size: 10px; letter-spacing: .06em; text-transform: uppercase; }
+    .artifact-links { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+    .artifact-links a { color: var(--blue); text-decoration: none; border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; font-size: 12px; }
+    .run-meta { margin-top: 13px; color: var(--muted); font-size: 12px; }
+    .toast { position: fixed; right: 20px; bottom: 20px; max-width: 460px; color: var(--text); background: #151b24; border: 1px solid var(--line); border-left: 3px solid var(--blue); border-radius: 11px; padding: 12px 14px; box-shadow: var(--shadow); transform: translateY(130%); opacity: 0; transition: .25s; z-index: 50; }
+    .toast.show { transform: translateY(0); opacity: 1; }
+    .toast.error { border-left-color: var(--red); }
+    .record-pill { display: none; position: fixed; top: 12px; right: 12px; z-index: 100; border: 1px solid #394556; background: rgba(9, 12, 17, .86); color: var(--text); border-radius: 999px; padding: 8px 12px; font-weight: 800; backdrop-filter: blur(10px); }
+    body.recording .setup-card, body.recording .tabbar, body.recording .subtitle, body.recording .key-state, body.recording #recordBtn { display: none; }
+    body.recording .record-pill { display: block; }
+    body.recording .shell { width: 100%; max-width: none; padding: 12px; }
+    body.recording .top { margin-bottom: 10px; }
+    body.recording h1 { font-size: 27px; }
+    body.recording .view-toolbar { min-height: 34px; }
+    body.recording .stream { height: calc(100vh - 150px); }
+    body.recording .preview-viewport { height: calc(100vh - 205px); min-height: 0; aspect-ratio: auto; }
+    .demo-badge { display: none; color: #0a1015; background: var(--blue); border-radius: 6px; padding: 3px 6px; font-size: 10px; font-weight: 900; letter-spacing: .08em; }
+    body.demo-run .demo-badge { display: inline-block; }
+    @media (max-width: 900px) {
+      .setup-grid, .comparison-grid { grid-template-columns: 1fr; }
+      .stream { height: 340px; }
+      .top { align-items: flex-start; flex-direction: column; }
+      .top-actions { width: 100%; }
+      .setup-actions { flex-wrap: wrap; }
+      .setup-note { flex-basis: 100%; }
+    }
+  </style>
+</head>
+<body>
+  <button class="record-pill" id="exitRecord">Exit recording mode</button>
+  <div class="shell">
+    <header class="top">
+      <div>
+        <div class="eyebrow">LLM HTML Arena <span class="demo-badge">DEMO</span></div>
+        <h1><span id="header-a-title">Model A</span> <span style="color:#526071">vs</span> <span id="header-b-title">Model B</span></h1>
+        <div class="subtitle">Stream → exact usage tokens → synchronized replay → two runnable HTML outputs</div>
+      </div>
+      <div class="top-actions">
+        <span class="key-state" id="keyState">Checking API key…</span>
+        <button class="btn" id="recordBtn">Recording mode</button>
+      </div>
+    </header>
+
+    <section class="setup-card">
+      <div class="setup-grid endpoint-grid">
+        <div>
+          <label for="baseUrl">OpenAI-compatible Base URL</label>
+          <input id="baseUrl" type="url" placeholder="https://openrouter.ai/api/v1" autocomplete="off" spellcheck="false">
+        </div>
+        <div>
+          <label for="modelA">Model A ID</label>
+          <input id="modelA" type="text" placeholder="provider/model-a" autocomplete="off" spellcheck="false">
+        </div>
+        <div>
+          <label for="modelB">Model B ID</label>
+          <input id="modelB" type="text" placeholder="provider/model-b" autocomplete="off" spellcheck="false">
+        </div>
+      </div>
+      <div class="setup-grid">
+        <div>
+          <label for="prompt">Shared prompt</label>
+          <textarea id="prompt"></textarea>
+        </div>
+        <div>
+          <label for="maxTokens">Max tokens (optional)</label>
+          <input id="maxTokens" type="number" min="1" max="1048576" step="1024" placeholder="do not send">
+        </div>
+        <div>
+          <label for="order">Request order</label>
+          <select id="order">
+            <option value="a,b">Model A first</option>
+            <option value="b,a">Model B first</option>
+          </select>
+        </div>
+      </div>
+      <div class="setup-actions">
+        <div class="setup-note">Enter a Base URL ending in <code>…/v1</code> or the full <code>…/chat/completions</code> endpoint. The key is read from OPENAI_API_KEY and never reaches the browser or artifacts.</div>
+        <button class="btn demo" id="demoBtn">Free demo</button>
+        <button class="btn primary" id="runBtn">Run API comparison</button>
+      </div>
+    </section>
+
+    <nav class="tabbar">
+      <button class="tab active" data-view="live">1. Capture</button>
+      <button class="tab" data-view="replay">2. Text replay</button>
+      <button class="tab" data-view="preview">3. Visual outputs</button>
+      <button class="tab" data-view="metrics">4. Metrics</button>
+    </nav>
+
+    <main>
+      <section class="view active" id="view-live">
+        <div class="view-toolbar">
+          <span id="runStatus">Ready</span>
+          <span class="hint">Live token counts are approximate; final values come from API usage.</span>
+        </div>
+        <div class="comparison-grid">
+          <article class="model-panel a" id="live-a-panel">
+            <div class="progress-line"></div>
+            <div class="model-head">
+              <div><div class="model-title" id="live-a-title">Model A</div><div class="phase" id="live-a-phase">waiting</div></div>
+              <div class="mini-metrics"><div class="mini-metric"><span>Time</span><b id="live-a-time">—</b></div><div class="mini-metric"><span>Tokens</span><b id="live-a-tokens">—</b></div></div>
+            </div>
+            <pre class="stream"><span class="placeholder" id="live-a-code">Reasoning and final HTML will stream here.</span></pre>
+          </article>
+          <article class="model-panel b" id="live-b-panel">
+            <div class="progress-line"></div>
+            <div class="model-head">
+              <div><div class="model-title" id="live-b-title">Model B</div><div class="phase" id="live-b-phase">waiting</div></div>
+              <div class="mini-metrics"><div class="mini-metric"><span>Time</span><b id="live-b-time">—</b></div><div class="mini-metric"><span>Tokens</span><b id="live-b-tokens">—</b></div></div>
+            </div>
+            <pre class="stream"><span class="placeholder" id="live-b-code">The second request starts after the first one finishes.</span></pre>
+          </article>
+        </div>
+      </section>
+
+      <section class="view" id="view-replay">
+        <div class="view-toolbar">
+          <button class="btn" id="replayActual" disabled>Actual speed</button>
+          <button class="btn" id="replay30" disabled>30-second edit</button>
+          <button class="btn" id="replay15" disabled>15-second edit</button>
+          <button class="btn danger" id="replayStop" disabled>Stop</button>
+          <span class="hint" id="replayHint">Complete an API comparison first.</span>
+        </div>
+        <div class="comparison-grid">
+          <article class="model-panel a" id="replay-a-panel">
+            <div class="model-head"><div><div class="model-title" id="replay-a-title">Model A</div><div class="phase" id="replay-a-phase">replay</div></div><div class="mini-metrics"><div class="mini-metric"><span>API time</span><b id="replay-a-time">—</b></div><div class="mini-metric"><span>Tokens</span><b id="replay-a-tokens">—</b></div></div></div>
+            <pre class="stream" id="replay-a-code"></pre>
+          </article>
+          <article class="model-panel b" id="replay-b-panel">
+            <div class="model-head"><div><div class="model-title" id="replay-b-title">Model B</div><div class="phase" id="replay-b-phase">replay</div></div><div class="mini-metrics"><div class="mini-metric"><span>API time</span><b id="replay-b-time">—</b></div><div class="mini-metric"><span>Tokens</span><b id="replay-b-tokens">—</b></div></div></div>
+            <pre class="stream" id="replay-b-code"></pre>
+          </article>
+        </div>
+      </section>
+
+      <section class="view" id="view-preview">
+        <div class="view-toolbar">
+          <button class="btn" id="reloadPreviews" disabled>Restart both outputs</button>
+          <span class="hint">Each page runs at 1440×900 and is scaled to fit. Network access and external assets are blocked.</span>
+        </div>
+        <div class="comparison-grid">
+          <article class="model-panel a">
+            <div class="model-head"><div><div class="model-title" id="preview-a-title">Model A</div><div class="phase">rendered output</div></div></div>
+            <div class="preview-viewport" id="preview-a-viewport"><div class="preview-stage" id="preview-a-stage"><iframe class="preview-frame" id="preview-a" sandbox="allow-scripts" title="Model A output"></iframe></div></div>
+            <div class="preview-metrics" id="preview-a-metrics"></div>
+          </article>
+          <article class="model-panel b">
+            <div class="model-head"><div><div class="model-title" id="preview-b-title">Model B</div><div class="phase">rendered output</div></div></div>
+            <div class="preview-viewport" id="preview-b-viewport"><div class="preview-stage" id="preview-b-stage"><iframe class="preview-frame" id="preview-b" sandbox="allow-scripts" title="Model B output"></iframe></div></div>
+            <div class="preview-metrics" id="preview-b-metrics"></div>
+          </article>
+        </div>
+      </section>
+
+      <section class="view" id="view-metrics">
+        <div class="score-card">
+          <div class="score-head"><h2>Final scoreboard</h2><div class="total-cost">Cost reported in usage: <strong id="totalCost">—</strong></div></div>
+          <div style="overflow:auto">
+            <table>
+              <thead><tr><th>Model</th><th>Input</th><th>Cached</th><th>Completion</th><th>Total</th><th>TTFT</th><th>Time</th><th>tok/s</th><th>Cost</th><th>HTML</th></tr></thead>
+              <tbody id="metricsBody"><tr><td colspan="10" style="text-align:center;color:var(--muted)">No data yet</td></tr></tbody>
+            </table>
+          </div>
+          <div class="artifact-links" id="artifactLinks"></div>
+          <div class="run-meta" id="runMeta">Exact values appear after the final SSE usage block.</div>
+        </div>
+      </section>
+    </main>
+  </div>
+  <div class="toast" id="toast"></div>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const state = {
+      config: null,
+      runId: null,
+      summary: null,
+      eventSource: null,
+      timers: [],
+      live: {
+        a: { text: '', kind: null, started: null, ticker: null },
+        b: { text: '', kind: null, started: null, ticker: null }
+      }
+    };
+    const PREVIEW_WIDTH = 1440;
+    const PREVIEW_HEIGHT = 900;
+
+    function toast(message, isError = false) {
+      const el = $('toast');
+      el.textContent = message;
+      el.classList.toggle('error', isError);
+      el.classList.add('show');
+      clearTimeout(el._timer);
+      el._timer = setTimeout(() => el.classList.remove('show'), 5000);
+    }
+
+    function fmtSeconds(value) {
+      if (value === null || value === undefined) return '—';
+      return `${Number(value).toFixed(value >= 100 ? 0 : 1)}s`;
+    }
+    function fmtInt(value) { return value === null || value === undefined ? '—' : Number(value).toLocaleString('en-US'); }
+    function fmtCost(value) { return value === null || value === undefined ? '—' : `$${Number(value).toFixed(4)}`; }
+    function escapeHtml(value) {
+      return String(value).replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
+    }
+
+    function switchView(name) {
+      document.querySelectorAll('.tab').forEach(btn => btn.classList.toggle('active', btn.dataset.view === name));
+      document.querySelectorAll('.view').forEach(view => view.classList.toggle('active', view.id === `view-${name}`));
+      if (name === 'preview') requestAnimationFrame(fitAllPreviews);
+    }
+
+    function fitPreview(slug) {
+      const viewport = $(`preview-${slug}-viewport`);
+      const stage = $(`preview-${slug}-stage`);
+      if (!viewport || !stage || viewport.clientWidth <= 0 || viewport.clientHeight <= 0) return;
+      const scale = Math.min(viewport.clientWidth / PREVIEW_WIDTH, viewport.clientHeight / PREVIEW_HEIGHT);
+      const left = Math.max(0, (viewport.clientWidth - PREVIEW_WIDTH * scale) / 2);
+      const top = Math.max(0, (viewport.clientHeight - PREVIEW_HEIGHT * scale) / 2);
+      stage.style.transform = `translate(${left}px, ${top}px) scale(${scale})`;
+    }
+
+    function fitAllPreviews() {
+      ['a', 'b'].forEach(fitPreview);
+    }
+
+    document.querySelectorAll('.tab').forEach(btn => btn.addEventListener('click', () => switchView(btn.dataset.view)));
+
+    async function loadConfig() {
+      const response = await fetch('/api/config');
+      state.config = await response.json();
+      $('prompt').value = state.config.default_prompt;
+      $('baseUrl').value = state.config.default_base_url;
+      $('modelA').value = state.config.default_models.a;
+      $('modelB').value = state.config.default_models.b;
+      $('maxTokens').value = state.config.default_max_completion_tokens ?? '';
+      const key = $('keyState');
+      key.textContent = state.config.api_key_configured
+        ? `${state.config.api_key_source} configured`
+        : 'API key not set · Demo and no-auth APIs are available';
+      key.classList.toggle('ok', state.config.api_key_configured);
+      updateModelTitles();
+    }
+
+    function configuredModelName(slug) {
+      const value = $(slug === 'a' ? 'modelA' : 'modelB').value.trim();
+      return value || `Model ${slug.toUpperCase()}`;
+    }
+
+    function updateModelTitles(labels = null) {
+      ['a', 'b'].forEach(slug => {
+        const name = labels?.[slug] || configuredModelName(slug);
+        ['header', 'live', 'replay', 'preview'].forEach(area => {
+          const node = $(`${area}-${slug}-title`);
+          if (node) node.textContent = name;
+        });
+      });
+    }
+
+    function resetLive() {
+      ['a', 'b'].forEach(slug => {
+        const live = state.live[slug];
+        live.text = ''; live.kind = null; live.started = null;
+        clearInterval(live.ticker);
+        $(`live-${slug}-code`).textContent = '';
+        $(`live-${slug}-phase`).textContent = 'waiting';
+        $(`live-${slug}-time`).textContent = '—';
+        $(`live-${slug}-tokens`).textContent = '—';
+        $(`live-${slug}-panel`).classList.remove('running');
+      });
+      state.summary = null;
+      stopReplay();
+      ['replayActual', 'replay30', 'replay15', 'replayStop', 'reloadPreviews'].forEach(id => $(id).disabled = true);
+      $('metricsBody').innerHTML = '<tr><td colspan="10" style="text-align:center;color:var(--muted)">Generation in progress…</td></tr>';
+      $('artifactLinks').innerHTML = '';
+      $('totalCost').textContent = '—';
+      $('preview-a').removeAttribute('src');
+      $('preview-b').removeAttribute('src');
+      $('preview-a-metrics').innerHTML = '';
+      $('preview-b-metrics').innerHTML = '';
+    }
+
+    function setButtons(running) {
+      $('runBtn').disabled = running;
+      $('demoBtn').disabled = running;
+      $('prompt').disabled = running;
+      $('baseUrl').disabled = running;
+      $('modelA').disabled = running;
+      $('modelB').disabled = running;
+      $('maxTokens').disabled = running;
+      $('order').disabled = running;
+    }
+
+    async function startRun(demo) {
+      const baseUrl = $('baseUrl').value.trim();
+      const models = { a: $('modelA').value.trim(), b: $('modelB').value.trim() };
+      if (!baseUrl) {
+        toast('Enter an OpenAI-compatible Base URL.', true);
+        return;
+      }
+      if (!demo && (!models.a || !models.b)) {
+        toast('Enter a model ID for both sides.', true);
+        return;
+      }
+      updateModelTitles(demo ? {a: models.a || 'Demo Model A', b: models.b || 'Demo Model B'} : models);
+      resetLive();
+      document.body.classList.toggle('demo-run', demo);
+      switchView('live');
+      setButtons(true);
+      $('runStatus').textContent = demo ? 'Starting the safe demo…' : 'Sending requests sequentially…';
+      const payload = {
+        prompt: $('prompt').value,
+        base_url: baseUrl,
+        models,
+        max_completion_tokens: $('maxTokens').value.trim() || null,
+        order: $('order').value.split(','),
+        demo
+      };
+      try {
+        const response = await fetch('/api/run', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || 'Could not start the comparison');
+        state.runId = result.run_id;
+        connectEvents(result.events_url);
+      } catch (error) {
+        setButtons(false);
+        $('runStatus').textContent = 'Start failed';
+        toast(error.message, true);
+      }
+    }
+
+    function connectEvents(url) {
+      if (state.eventSource) state.eventSource.close();
+      const source = new EventSource(url);
+      state.eventSource = source;
+      source.onmessage = (message) => handleEvent(JSON.parse(message.data));
+      source.onerror = () => {
+        if (!state.summary) toast('The stream connection was interrupted. The server will preserve data already received.', true);
+      };
+    }
+
+    function startTicker(slug) {
+      const live = state.live[slug];
+      live.started = performance.now();
+      clearInterval(live.ticker);
+      live.ticker = setInterval(() => {
+        const seconds = (performance.now() - live.started) / 1000;
+        $(`live-${slug}-time`).textContent = fmtSeconds(seconds);
+      }, 100);
+    }
+
+    function appendLive(slug, kind, text) {
+      const live = state.live[slug];
+      const code = $(`live-${slug}-code`);
+      if (live.kind !== kind) {
+        if (live.text) live.text += kind === 'content' ? '\n\n════ FINAL HTML ════\n' : '\n\n════ REASONING ════\n';
+        live.kind = kind;
+      }
+      live.text += text;
+      code.textContent = live.text;
+      code.parentElement.scrollTop = code.parentElement.scrollHeight;
+      $(`live-${slug}-phase`).textContent = kind === 'reasoning' ? 'reasoning stream' : 'final HTML stream';
+      $(`live-${slug}-tokens`).textContent = `~${Math.max(1, Math.round(live.text.length / 4)).toLocaleString('en-US')}`;
+    }
+
+    function handleEvent(event) {
+      if (event.type === 'run_started') {
+        const orderLabels = event.order.map(slug => event.models?.[slug] || `Model ${slug.toUpperCase()}`);
+        $('runStatus').textContent = `Run ${event.run_id} · order: ${orderLabels.join(' → ')}`;
+      } else if (event.type === 'model_started') {
+        const slug = event.model;
+        $(`live-${slug}-panel`).classList.add('running');
+        $(`live-${slug}-phase`).textContent = 'connecting to API';
+        $(`live-${slug}-code`).textContent = '';
+        state.live[slug].text = '';
+        startTicker(slug);
+      } else if (event.type === 'delta') {
+        appendLive(event.model, event.kind, event.text);
+      } else if (event.type === 'model_complete') {
+        const slug = event.model;
+        clearInterval(state.live[slug].ticker);
+        $(`live-${slug}-panel`).classList.remove('running');
+        $(`live-${slug}-phase`).textContent = 'complete';
+        $(`live-${slug}-time`).textContent = fmtSeconds(event.metrics.total_seconds);
+        $(`live-${slug}-tokens`).textContent = fmtInt(event.metrics.completion_tokens);
+      } else if (event.type === 'model_error') {
+        const slug = event.model;
+        clearInterval(state.live[slug].ticker);
+        $(`live-${slug}-panel`).classList.remove('running');
+        $(`live-${slug}-phase`).textContent = 'error';
+        appendLive(slug, 'content', `\n\nERROR: ${event.error}`);
+        toast(`${slug}: ${event.error}`, true);
+      } else if (event.type === 'pair_complete') {
+        if (state.eventSource) state.eventSource.close();
+        loadSummary(event.summary_url);
+      }
+    }
+
+    async function loadSummary(url) {
+      const response = await fetch(url);
+      state.summary = await response.json();
+      updateModelTitles({a: state.summary.models.a.label, b: state.summary.models.b.label});
+      setButtons(false);
+      $('runStatus').textContent = state.summary.status === 'complete' ? 'Both responses are saved. Replay is ready to record.' : `Run finished: ${state.summary.status}`;
+      ['replayActual', 'replay30', 'replay15', 'replayStop', 'reloadPreviews'].forEach(id => $(id).disabled = false);
+      $('replayHint').textContent = 'Actual speed preserves the original pace; edit modes compress each track independently.';
+      renderSummary();
+      toast('Comparison complete: open Text replay, then Visual outputs and Metrics.');
+    }
+
+    function renderMiniMetrics(slug) {
+      const m = state.summary.models[slug].metrics || {};
+      return [
+        ['Tokens', fmtInt(m.completion_tokens)],
+        ['Time', fmtSeconds(m.total_seconds)],
+        ['tok/s', m.tokens_per_second === null || m.tokens_per_second === undefined ? '—' : Number(m.tokens_per_second).toFixed(1)],
+        ['Cost', fmtCost(m.reported_cost_usd)]
+      ].map(([label, value]) => `<div><span>${label}</span><b>${value}</b></div>`).join('');
+    }
+
+    function renderSummary() {
+      const summary = state.summary;
+      ['a', 'b'].forEach(slug => {
+        const model = summary.models[slug];
+        const m = model.metrics || {};
+        $(`replay-${slug}-time`).textContent = fmtSeconds(m.total_seconds);
+        $(`replay-${slug}-tokens`).textContent = fmtInt(m.completion_tokens);
+        if (model.output_url) $(`preview-${slug}`).src = `${model.output_url}?v=${Date.now()}`;
+        $(`preview-${slug}-metrics`).innerHTML = renderMiniMetrics(slug);
+      });
+      const rows = ['a', 'b'].map(slug => {
+        const model = summary.models[slug], m = model.metrics || {};
+        return `<tr><td style="color:${slug === 'a' ? 'var(--model-a)' : 'var(--model-b)'};font-weight:850">${escapeHtml(model.label)}</td><td>${fmtInt(m.prompt_tokens)}</td><td>${fmtInt(m.cached_tokens)}</td><td>${fmtInt(m.completion_tokens)}</td><td>${fmtInt(m.total_tokens)}</td><td>${fmtSeconds(m.time_to_first_token_seconds)}</td><td>${fmtSeconds(m.total_seconds)}</td><td>${m.tokens_per_second === null || m.tokens_per_second === undefined ? '—' : Number(m.tokens_per_second).toFixed(1)}</td><td>${fmtCost(m.reported_cost_usd)}</td><td>${m.html_extracted ? '✓' : '✕'}</td></tr>`;
+      }).join('');
+      $('metricsBody').innerHTML = rows;
+      const costs = ['a', 'b'].map(slug => summary.models[slug].metrics?.reported_cost_usd).filter(value => value !== null && value !== undefined);
+      $('totalCost').textContent = costs.length === 2 ? fmtCost(costs.reduce((sum, value) => sum + Number(value), 0)) : '—';
+      const links = [];
+      ['a', 'b'].forEach(slug => {
+        const model = summary.models[slug];
+        Object.entries(model.artifacts || {}).forEach(([name, url]) => links.push(`<a href="${url}" target="_blank" rel="noopener">${escapeHtml(model.label)}: ${name}</a>`));
+      });
+      links.push(`<a href="/runs/${summary.id}/run.json" target="_blank" rel="noopener">Complete run.json</a>`);
+      $('artifactLinks').innerHTML = links.join('');
+      const limit = summary.max_completion_tokens ? `${fmtInt(summary.max_completion_tokens)} max_tokens` : 'max_tokens not sent';
+      const usageMissing = ['a', 'b'].some(slug => !summary.models[slug].metrics?.usage_received);
+      $('runMeta').textContent = `Run ${summary.id} · ${summary.demo ? 'DEMO — do not publish these numbers' : 'OpenAI-compatible API'} · ${limit} · ${summary.endpoint_url}${usageMissing ? ' · WARNING: the provider did not return usage for one model' : ''}`;
+    }
+
+    function stopReplay() {
+      state.timers.forEach(clearTimeout);
+      state.timers = [];
+      if ($('replayStop')) $('replayStop').disabled = !state.summary;
+    }
+
+    function prepareReplayPanel(slug) {
+      const code = $(`replay-${slug}-code`);
+      code.textContent = '';
+      code.dataset.kind = '';
+      $(`replay-${slug}-phase`).textContent = 'replay ready';
+    }
+
+    function appendReplay(slug, item) {
+      const code = $(`replay-${slug}-code`);
+      if (code.dataset.kind !== item.kind) {
+        if (code.textContent) code.textContent += item.kind === 'content' ? '\n\n════ FINAL HTML ════\n' : '\n\n════ REASONING ════\n';
+        code.dataset.kind = item.kind;
+        $(`replay-${slug}-phase`).textContent = item.kind === 'reasoning' ? 'reasoning stream' : 'final HTML stream';
+      }
+      code.textContent += item.text;
+      code.scrollTop = code.scrollHeight;
+    }
+
+    function replay(mode) {
+      if (!state.summary) return;
+      stopReplay();
+      ['a', 'b'].forEach(prepareReplayPanel);
+      const target = mode === 'actual' ? null : Number(mode);
+      ['a', 'b'].forEach(slug => {
+        const timeline = state.summary.models[slug].timeline || [];
+        const last = timeline.length ? timeline[timeline.length - 1].t : 1;
+        const scale = target ? target / Math.max(last, .001) : 1;
+        timeline.forEach(item => {
+          const timer = setTimeout(() => appendReplay(slug, item), Math.max(0, item.t * scale * 1000));
+          state.timers.push(timer);
+        });
+        const doneTimer = setTimeout(() => $(`replay-${slug}-phase`).textContent = 'replay complete', Math.max(0, last * scale * 1000 + 80));
+        state.timers.push(doneTimer);
+      });
+      $('replayHint').textContent = target ? `Edit replay: each track is compressed to ${target} seconds. Original API time remains in the header.` : 'Replay uses the original API pace. The models start together only during playback.';
+    }
+
+    function reloadPreviews() {
+      if (!state.summary) return;
+      ['a', 'b'].forEach(slug => {
+        const url = state.summary.models[slug].output_url;
+        if (url) $(`preview-${slug}`).src = `${url}?restart=${Date.now()}`;
+      });
+      requestAnimationFrame(fitAllPreviews);
+    }
+
+    async function toggleRecording() {
+      const active = document.body.classList.toggle('recording');
+      try {
+        if (active && !document.fullscreenElement) await document.documentElement.requestFullscreen();
+        if (!active && document.fullscreenElement) await document.exitFullscreen();
+      } catch (_) {}
+      requestAnimationFrame(fitAllPreviews);
+    }
+
+    $('runBtn').addEventListener('click', () => startRun(false));
+    $('demoBtn').addEventListener('click', () => startRun(true));
+    $('replayActual').addEventListener('click', () => replay('actual'));
+    $('replay30').addEventListener('click', () => replay('30'));
+    $('replay15').addEventListener('click', () => replay('15'));
+    $('replayStop').addEventListener('click', stopReplay);
+    $('reloadPreviews').addEventListener('click', reloadPreviews);
+    $('recordBtn').addEventListener('click', toggleRecording);
+    $('exitRecord').addEventListener('click', toggleRecording);
+    $('modelA').addEventListener('input', () => updateModelTitles());
+    $('modelB').addEventListener('input', () => updateModelTitles());
+    const previewObserver = new ResizeObserver(fitAllPreviews);
+    previewObserver.observe($('preview-a-viewport'));
+    previewObserver.observe($('preview-b-viewport'));
+    document.addEventListener('fullscreenchange', () => {
+      if (!document.fullscreenElement) document.body.classList.remove('recording');
+      requestAnimationFrame(fitAllPreviews);
+    });
+    loadConfig().catch(error => toast(error.message, true));
+  </script>
+</body>
+</html>

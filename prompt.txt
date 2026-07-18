@@ -1,0 +1,15 @@
+Create one self-contained `index.html` called “Gridlock”. Return only the complete HTML document, without markdown fences or explanation.
+
+The goal is a polished visual demo, not a physically accurate traffic simulator. Priority order: (1) the page loads with no JavaScript errors, (2) cars are immediately visible and moving, (3) every control works, (4) visual polish. Use the simplest reliable implementation and keep the complete document under 20,000 characters.
+
+Requirements:
+- Render a fixed 1440×900 nighttime, top-down four-way intersection in one Canvas, scaled responsively with CSS.
+- Spawn simple rectangular cars from all four directions. Cars travel straight through the intersection only, obey a deterministic two-phase north/south versus east/west traffic light, and keep a simple safe gap from the car ahead in the same lane.
+- Do not implement turns, pathfinding, intersection reservations, realistic collision physics, or lane changes.
+- Show four crosswalks and simple animated pedestrians. A “Request walk” button queues a short pedestrian phase in which all cars stop.
+- Show live active-car, queue, and collision counters. The collision counter may remain zero when safe gaps work.
+- Include a simulation-speed slider, Pause/Resume, and Reset.
+- Use `requestAnimationFrame` with delta time. Use deterministic initial state and make several cars visible as soon as the page loads.
+- Use only HTML, CSS, Canvas, and vanilla JavaScript. No libraries, network requests, external assets, or external fonts.
+
+Before returning, syntax-check every JavaScript expression. Confirm that every `getElementById` result used by an event listener is stored in the UI object, and that initialization plus the animation loop are called. Do not use TypeScript syntax, named arguments, pseudo-code, omitted functions, or placeholders. The response must begin with `<!doctype html>` and end with `</html>`.
