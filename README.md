@@ -1,4 +1,4 @@
-# LLM HTML Arena
+# LLM Arena
 
 A dependency-free local benchmark and recording bench for comparing two OpenAI-compatible chat models on the same HTML generation task.
 
